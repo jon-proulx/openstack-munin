@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+#
+# Plugin to monitor trending of launch/schedule times for last 5 successful instances
+#
+# To monitor a floating ips, link floating_ips to this file.
+# E.g.
+#    ln -s /usr/share/munin/plugins/nova_instance_timing /etc/munin/plugins/
+#
+# Needs following minimal configuration in plugin-conf.d/nova:
+#   [nova_*]
+#   user nova
+#
+# Magic markers
+#%# capabilities=autoconf
+#%# family=auto
+
+import sys
+
+try:
+    from nova import context
+    from nova import db
+    from nova import flags
+    from nova import utils
+    from nova.db.sqlalchemy.session import get_session
+    from nova.openstack.common import log as logging
+    from nova.openstack.common import cfg
+    FLAGS = flags.FLAGS
+except ImportError:
+    succesful_import = False
+else:
+    succesful_import = True
+
+
+def print_config():
+    global states
+    print 'graph_title Nova Memory Utilization'
+    print 'graph_category nova'
+    print 'graph_scale no'
+    print 'graph_info This shows total and utilized memory resources for VM allocation'
+    print 'total_mem.label Total Memory'
+    print 'total_mem.draw LINE2'
+    print 'total_mem.info total amount of memory available to nova-compute (in MB)'
+    print 'used_mem.label Memory In Use'
+    print 'used_mem.draw LINE2'
+    print 'used_mem.info amount of memory currently in use (in MB)'
+
+
+def get_status():
+    connection = get_session().connection()
+    row = connection.execute("select sum(memory_mb) from compute_nodes").fetchall()[0]
+    total_mem = row[0]
+    row = connection.execute("select ( sum(memory_mb) - sum(free_ram_mb) ) as used_ram_mb from compute_nodes;").fetchall()[0]
+    used_mem = row[0]
+    return (total_mem,used_mem)
+
+
+def print_values():
+    total_mem,used_mem = get_status()
+    print "total_mem.value %s" % total_mem
+    print "used_mem.value %s" % used_mem
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "config":
+            print_config()
+        elif sys.argv[1] == "autoconf":
+            if not succesful_import:  
+                print 'no (failed import nova module)'
+                sys.exit(0)
+            else:
+                print 'yes'
+    elif succesful_import:
+        flags.parse_args(sys.argv)
+        #logging.setup("nova")
+        print_values()

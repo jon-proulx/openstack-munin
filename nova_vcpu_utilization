@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+#
+# Plugin to monitor trending of launch/schedule times for last 5 successful instances
+#
+# To monitor a floating ips, link floating_ips to this file.
+# E.g.
+#    ln -s /usr/share/munin/plugins/nova_instance_timing /etc/munin/plugins/
+#
+# Needs following minimal configuration in plugin-conf.d/nova:
+#   [nova_*]
+#   user nova
+#
+# Magic markers
+#%# capabilities=autoconf
+#%# family=auto
+
+import sys
+
+try:
+    from nova import context
+    from nova import db
+    from nova import flags
+    from nova import utils
+    from nova.db.sqlalchemy.session import get_session
+    from nova.openstack.common import log as logging
+    from nova.openstack.common import cfg
+    FLAGS = flags.FLAGS
+except ImportError:
+    succesful_import = False
+else:
+    succesful_import = True
+
+
+def print_config():
+    global states
+    print 'graph_title Nova Virtual CPU Utilization'
+    print 'graph_category nova'
+    print 'graph_scale no'
+    print 'graph_info This shows total and utilized nova-compute vCPUs'
+    print 'total_vcpu.label Total vCPUs'
+    print 'total_vcpu.draw LINE2'
+    print 'total_vcpu.info total number of vcpus available to nova-compute'
+    print 'used_vcpu.label vCPUs In Use'
+    print 'used_vcpu.draw LINE2'
+    print 'used_vcpu.info number of vcpus currently in use'
+    print 'instances.label Running Instances'
+    print 'instances.draw LINE2'
+    print 'instances.info number of currently running instances'
+
+
+
+def get_status():
+    connection = get_session().connection()
+    row = connection.execute("select sum(vcpus) from compute_nodes").fetchall()[0]
+    total_vcpu = row[0]
+    row = connection.execute("select sum(vcpus_used) from compute_nodes;").fetchall()[0]
+    used_vcpu = row[0]
+    row = connection.execute("select sum(running_vms) from compute_nodes").fetchall()[0]
+    instances = row[0]
+    return (total_vcpu,used_vcpu,instances)
+
+
+def print_values():
+    total_vcpu,used_vcpu,instances = get_status()
+    print "total_vcpu.value %s" % total_vcpu
+    print "used_vcpu.value %s" % used_vcpu
+    print "instances.value %s" % instances
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "config":
+            print_config()
+        elif sys.argv[1] == "autoconf":
+            if not succesful_import:  
+                print 'no (failed import nova module)'
+                sys.exit(0)
+            else:
+                print 'yes'
+    elif succesful_import:
+        flags.parse_args(sys.argv)
+        #logging.setup("nova")
+        print_values()
