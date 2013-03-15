@@ -47,7 +47,7 @@ def print_config():
 
 def get_status():
     connection = get_session().connection()
-    row = connection.execute("select sum(memory_mb) from compute_nodes").fetchall()[0]
+    row = connection.execute("select sum(compute_nodes.memory_mb) from compute_nodes,services where compute_nodes.service_id = services.id and services.updated_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE);").fetchall()[0]
     total_mem = row[0]
     row = connection.execute("select ( sum(memory_mb) - sum(free_ram_mb) ) as used_ram_mb from compute_nodes;").fetchall()[0]
     used_mem = row[0]
