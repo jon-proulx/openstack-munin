@@ -51,12 +51,10 @@ def print_config():
 
 def get_status():
     connection = get_session().connection()
-    row = connection.execute("select sum(compute_nodes.vcpus) from compute_nodes,services where compute_nodes.service_id = services.id and services.updated_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE);").fetchall()[0]
+    row = connection.execute("select sum(compute_nodes.vcpus), sum(compute_nodes.vcpus_used),sum(compute_nodes.running_vms) from compute_nodes,services where compute_nodes.service_id = services.id and services.updated_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE);").fetchall()[0]
     total_vcpu = row[0]
-    row = connection.execute("select sum(vcpus_used) from compute_nodes;").fetchall()[0]
-    used_vcpu = row[0]
-    row = connection.execute("select sum(running_vms) from compute_nodes").fetchall()[0]
-    instances = row[0]
+    used_vcpu = row[1]
+    instances = row[2]
     return (total_vcpu,used_vcpu,instances)
 
 
