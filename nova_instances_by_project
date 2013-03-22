@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+#
+#
+# Needs following minimal configuration in plugin-conf.d/nova:
+#   [nova_*]
+#   user nova
+#
+# Magic markers
+#%# capabilities=autoconf
+#%# family=auto
+
+import sys
+
+
+try:
+    from keystone.common import utils
+    from keystone import config
+    from keystone import exception
+    from keystone import identity
+    from nova import context
+    from nova import db
+    from nova import flags
+    from nova import utils
+    from nova.db.sqlalchemy.session import get_session
+    from nova.openstack.common import log as logging
+    from nova.openstack.common import cfg
+    FLAGS = flags.FLAGS
+except ImportError:
+    succesful_import = False
+else:
+    succesful_import = True
+
+
+def print_config():
+    config.CONF(default_config_files=["/etc/keystone/keystone.conf"])
+    # Ldap and  pam driver don't support get_all_tenants()
+    # kvs and sql implement get_tenants() instead of get_all_tenants()
+    # Whoo: None of backend implements the correct function                                                            
+    projects = []
+    for api_func in [ 'get_all_tenants', 'get_tenants']:
+        try:
+            projects = getattr(identity.Manager(), api_func)(None)
+        except exception.NotImplemented, NotImplementedError:
+            pass
+        
+    print 'graph_title Nova Running Instances per Project'
+    print 'graph_category nova'
+    print 'graph_scale yes'
+    print 'graph_args --base 1024'
+    print 'graph_info Instaces in use by Project'
+    for project in projects:
+        print "%s_instances.label %s instances" % (project['name'],project['name'])
+        print "%s_instances.draw AREASTACK" % project['name']
+
+def get_status():
+    connection = get_session().connection()
+    rows = connection.execute("SELECT project.name as project ,count(instances.id) AS instances FROM nova.instances instances LEFT OUTER JOIN keystone.tenant project ON instances.project_id=project.id WHERE instances.deleted=0 GROUP BY project.name ORDER BY instances;").fetchall()
+    return (rows)
+
+
+def print_values():
+    rows = get_status()
+    for row in rows:
+        print "%s_instances.value %s" % (row[0],row[1])
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "config":
+            print_config()
+        elif sys.argv[1] == "autoconf":
+            if not succesful_import:  
+                print 'no (failed import nova module)'
+                sys.exit(0)
+            else:
+                print 'yes'
+    elif succesful_import:
+        flags.parse_args(sys.argv)
+        #logging.setup("nova")
+        print_values()
